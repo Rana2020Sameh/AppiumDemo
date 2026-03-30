@@ -10,13 +10,13 @@ public class BaseTests {
 
     @BeforeClass
     public void setUp() throws Exception {
-        driver = DriverManager.initializeDriver("android");
+        driver = DriverManager.initializeDriver("ios");
     }
 
-//    @AfterClass
-//    public void tearDown() {
-//        if (driver != null) {
-//            driver.quit();
-//        }
-//    }
+    @AfterClass
+    public void tearDown() {
+        if (driver != null) {
+            driver.quit();
+        }
+    }
 }

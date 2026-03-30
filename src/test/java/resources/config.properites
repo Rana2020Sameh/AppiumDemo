@@ -1,6 +1,14 @@
-platformName=android
+# Platform: android | ios
+platformName=ios
+
+# Android
 androidDeviceName=emulator-5554
-androidApp=/Users/ranasameh/Documents/Study/Appium/AppiumDemo/Apps/Appium Course To-Do (2).apk
+androidApp=Apps/Appium Course To-Do (2).apk
+
+# iOS – iPhone 16 Pro Simulator
+iosDeviceName=iPhone 16 Pro
 iosUdid=9D690641-C39B-492C-AC44-26E0CDD0023A
-iosApp=/Users/ranasameh/Documents/Study/Appium/AppiumDemo/Apps/todoqacart 2.app
+iosApp=Apps/todoqacart 2.app
+
+# Appium server
 appiumUrl=http://127.0.0.1:4723
