@@ -1,0 +1,6 @@
+platformName=android
+androidDeviceName=emulator-5554
+androidApp=/Users/ranasameh/Documents/Study/Appium/AppiumDemo/Apps/Appium Course To-Do (2).apk
+iosUdid=9D690641-C39B-492C-AC44-26E0CDD0023A
+iosApp=/Users/ranasameh/Documents/Study/Appium/AppiumDemo/Apps/todoqacart 2.app
+appiumUrl=http://127.0.0.1:4723
