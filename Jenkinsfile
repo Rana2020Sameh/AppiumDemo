@@ -12,9 +12,8 @@ pipeline {
     APPIUM_LOG     = "${WORKSPACE}/appium-server.log"
     APPIUM_PID     = "${WORKSPACE}/appium.pid"
 
-    // ── Extend PATH so Jenkins can find Homebrew tools (Node, Appium, etc.) ──
-    // Jenkins runs in a limited shell and often misses /opt/homebrew/bin
-    PATH           = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
+    // Base PATH — includes both Intel (/usr/local) and Apple Silicon (/opt/homebrew) locations
+    PATH = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
   }
 
   options {
@@ -25,7 +24,26 @@ pipeline {
 
   stages {
 
-    // ── 1. Verify all required tools are present before doing any real work ──
+    // ── 1. Extend PATH with npm's global bin directory ────────────────────────
+    // Jenkins runs in a stripped shell — npm global packages (like Appium) live
+    // at "$(npm config get prefix)/bin", which can vary per user/machine.
+    // We resolve it dynamically here and inject it for ALL subsequent stages.
+    stage('Setup Environment') {
+      steps {
+        script {
+          def npmPrefix = sh(
+            script: 'npm config get prefix 2>/dev/null || echo /opt/homebrew',
+            returnStdout: true
+          ).trim()
+          env.NPM_BIN = "${npmPrefix}/bin"
+          env.PATH    = "${env.NPM_BIN}:${env.PATH}"
+          echo "npm global bin: ${env.NPM_BIN}"
+          echo "Effective PATH: ${env.PATH}"
+        }
+      }
+    }
+
+    // ── 2. Verify all required tools are present ──────────────────────────────
     stage('Verify Prerequisites') {
       steps {
         sh '''
@@ -35,24 +53,37 @@ pipeline {
           java -version 2>&1 || { echo "ERROR: java not found!"; exit 1; }
 
           echo "--- Maven ---"
-          mvn --version || { echo "ERROR: mvn not found!"; exit 1; }
+          mvn --version || { echo "ERROR: mvn not found! Install via: brew install maven"; exit 1; }
 
           echo "--- Node / npm ---"
           node --version || { echo "ERROR: node not found. Install via: brew install node"; exit 1; }
-          npm  --version || { echo "ERROR: npm not found.";  exit 1; }
+          npm  --version || { echo "ERROR: npm not found."; exit 1; }
 
           echo "--- Appium ---"
-          which appium   || { echo "ERROR: appium not found. Install via: npm install -g appium"; exit 1; }
+          which appium || {
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "ERROR: Appium not found in PATH."
+            echo "Run these commands in your Terminal, then retry:"
+            echo "  npm install -g appium"
+            echo "  appium driver install xcuitest"
+            echo "npm global bin is: $(npm config get prefix)/bin"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1
+          }
           appium --version
 
-          echo "--- Appium XCUITest driver ---"
-          appium driver list --installed 2>/dev/null | grep xcuitest || {
-            echo "WARNING: XCUITest driver may not be installed."
-            echo "         Run: appium driver install xcuitest"
+          echo "--- XCUITest driver ---"
+          appium driver list --installed 2>/dev/null | grep -i xcuitest || {
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo "ERROR: XCUITest driver is not installed."
+            echo "Run in your Terminal, then retry:"
+            echo "  appium driver install xcuitest"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            exit 1
           }
 
           echo "--- Xcode CLI tools ---"
-          xcrun --version       || { echo "ERROR: xcrun not found. Install Xcode CLT."; exit 1; }
+          xcrun --version       || { echo "ERROR: xcrun not found. Install Xcode from the App Store."; exit 1; }
           xcodebuild -version 2>&1 | head -2
 
           echo "=== All prerequisite checks passed ==="
@@ -60,7 +91,7 @@ pipeline {
       }
     }
 
-    // ── 2. Boot the iPhone 16 Pro simulator ──────────────────────────────────
+    // ── 3. Boot the iPhone 16 Pro simulator ──────────────────────────────────
     stage('Boot iOS Simulator') {
       steps {
         sh '''
@@ -80,12 +111,11 @@ pipeline {
           fi
           echo "Simulator UDID: $UDID"
 
-          # Save UDID for the cleanup step in post
+          # Save UDID so the post block can shut it down
           echo "$UDID" > /tmp/jenkins_sim_udid.txt
 
-          # ── CRITICAL FIX: Update config.properites with the ACTUAL booted UDID ──
-          # The hardcoded UDID in config.properites is only valid on your local machine.
-          # On any other machine (or after a Xcode update), the UDID changes.
+          # Sync the real UDID into config.properites so the test driver connects
+          # to the correct simulator (the hardcoded value only works on one machine)
           sed -i '' "s|iosUdid=.*|iosUdid=$UDID|" \
             src/test/java/resources/config.properites
           echo "config.properites updated → iosUdid=$UDID"
@@ -94,7 +124,6 @@ pipeline {
           xcrun simctl shutdown "$UDID" 2>/dev/null || true
           sleep 2
 
-          # Boot the simulator
           xcrun simctl boot "$UDID"
 
           echo "Waiting for simulator to reach Booted state..."
@@ -109,28 +138,25 @@ pipeline {
             sleep 3
           done
 
-          # Open Simulator.app so the UI is visible (helps with XCUITest)
           open -a Simulator 2>/dev/null || true
         '''
       }
     }
 
-    // ── 3. Start Appium server ────────────────────────────────────────────────
+    // ── 4. Start Appium server ────────────────────────────────────────────────
     stage('Start Appium Server') {
       steps {
         sh '''
           echo "=== Starting Appium on port ${APPIUM_PORT} ==="
-          echo "Appium binary: $(which appium)"
+          echo "Appium path:    $(which appium)"
           echo "Appium version: $(appium --version)"
 
-          # Kill anything already sitting on the port
+          # Kill anything already on the port
           lsof -ti tcp:${APPIUM_PORT} | xargs kill -9 2>/dev/null || true
           sleep 1
 
-          # ── CRITICAL FIX: BUILD_ID=dontKillMe tells Jenkins NOT to kill ──
-          # ── background processes when the sh step ends.                  ──
-          # Without this, Jenkins kills Appium the moment this sh block exits,
-          # which is why curl never gets a response.
+          # BUILD_ID=dontKillMe prevents Jenkins from killing the background
+          # process when this sh block exits (its process-tree killer is aggressive)
           BUILD_ID=dontKillMe nohup appium \
             --port "${APPIUM_PORT}" \
             --log-level info \
@@ -139,63 +165,53 @@ pipeline {
 
           APPIUM_PID_VAL=$!
           echo "$APPIUM_PID_VAL" > "${APPIUM_PID}"
-          echo "Appium started with PID: $APPIUM_PID_VAL"
+          echo "Appium started → PID $APPIUM_PID_VAL"
 
-          # Poll until /status returns HTTP 200 (works for all Appium 2.x versions)
+          # Poll until /status returns HTTP 200
           echo "Waiting for Appium to be ready..."
           APPIUM_READY=false
           for i in $(seq 1 40); do
 
-            # Try 127.0.0.1 (IPv4)
             CODE=$(curl -s -o /dev/null -w "%{http_code}" \
                    http://127.0.0.1:${APPIUM_PORT}/status 2>/dev/null || echo "000")
             if [ "$CODE" = "200" ]; then
               echo "Appium is ready on 127.0.0.1 (attempt $i)"
-              APPIUM_READY=true
-              break
+              APPIUM_READY=true; break
             fi
 
-            # Also try localhost (covers IPv6 ::1 binding)
             CODE6=$(curl -s -o /dev/null -w "%{http_code}" \
                     http://localhost:${APPIUM_PORT}/status 2>/dev/null || echo "000")
             if [ "$CODE6" = "200" ]; then
               echo "Appium is ready on localhost (attempt $i)"
-              APPIUM_READY=true
-              break
+              APPIUM_READY=true; break
             fi
 
-            # If the process died early, stop waiting
             if ! kill -0 "$APPIUM_PID_VAL" 2>/dev/null; then
-              echo "ERROR: Appium process (PID $APPIUM_PID_VAL) died unexpectedly!"
+              echo "ERROR: Appium process died unexpectedly!"
               break
             fi
 
-            echo "  attempt $i / 40 — HTTP $CODE (127.0.0.1) / $CODE6 (localhost)"
+            echo "  attempt $i / 40 — HTTP $CODE"
             sleep 3
           done
 
-          # Always print the Appium log so you can see what happened
           echo "=== Appium Server Log ==="
-          cat "${APPIUM_LOG}" 2>/dev/null || echo "(log file not yet written)"
+          cat "${APPIUM_LOG}" 2>/dev/null || echo "(log not yet written)"
           echo "========================="
 
           if [ "$APPIUM_READY" != "true" ]; then
-            echo "ERROR: Appium did not become ready in time."
-            echo "Hints:"
-            echo "  1. Run: appium driver list --installed   (XCUITest must be listed)"
-            echo "  2. Run: appium driver install xcuitest   (if missing)"
-            echo "  3. Check the Appium log above for errors"
+            echo "ERROR: Appium did not become ready. See log above."
             exit 1
           fi
         '''
       }
     }
 
-    // ── 4. Compile and run Appium / TestNG tests ──────────────────────────────
+    // ── 5. Run Appium / TestNG tests ──────────────────────────────────────────
     stage('Run iOS Tests') {
       steps {
         sh '''
-          echo "=== Building and running tests on ${SIMULATOR_NAME} ==="
+          echo "=== Running tests on ${SIMULATOR_NAME} ==="
           mvn clean test \
             --batch-mode \
             --no-transfer-progress \
@@ -206,32 +222,27 @@ pipeline {
 
   }  // end stages
 
-  // ── Post-build: publish results and clean up regardless of outcome ─────────
+  // ── Post-build: publish results and clean up ──────────────────────────────
   post {
 
     always {
       echo "=== Post-build: collecting results and cleaning up ==="
 
-      // Publish TestNG / Surefire XML results
       junit allowEmptyResults: true,
             testResults: 'target/surefire-reports/*.xml'
 
-      // Archive the Appium server log for debugging
       archiveArtifacts artifacts: 'appium-server.log',
                        allowEmptyArchive: true
 
-      // Stop Appium
       sh '''
         if [ -f "${APPIUM_PID}" ]; then
           PID=$(cat "${APPIUM_PID}")
           kill "$PID" 2>/dev/null && echo "Appium (PID $PID) stopped." || true
           rm -f "${APPIUM_PID}"
         fi
-        # Belt-and-suspenders: kill anything still on the port
         lsof -ti tcp:${APPIUM_PORT} | xargs kill -9 2>/dev/null || true
       '''
 
-      // Shut down the simulator
       sh '''
         if [ -f /tmp/jenkins_sim_udid.txt ]; then
           UDID=$(cat /tmp/jenkins_sim_udid.txt)
@@ -242,17 +253,9 @@ pipeline {
       '''
     }
 
-    success {
-      echo "✅ All iOS Appium tests passed on ${env.SIMULATOR_NAME}!"
-    }
-
-    failure {
-      echo "❌ Build FAILED. Check the Surefire reports and appium-server.log above."
-    }
-
-    unstable {
-      echo "⚠️  Build UNSTABLE — some tests failed. Review the TestNG report."
-    }
+    success  { echo "✅ All iOS tests passed on ${env.SIMULATOR_NAME}!" }
+    failure  { echo "❌ Build FAILED. Check appium-server.log and Surefire reports." }
+    unstable { echo "⚠️  Build UNSTABLE — some tests failed. Review the TestNG report." }
 
   }
 
