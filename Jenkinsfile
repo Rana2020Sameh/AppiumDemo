@@ -12,8 +12,9 @@ pipeline {
     APPIUM_LOG     = "${WORKSPACE}/appium-server.log"
     APPIUM_PID     = "${WORKSPACE}/appium.pid"
 
-    // Base PATH — includes both Intel (/usr/local) and Apple Silicon (/opt/homebrew) locations
-    PATH = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
+    // Base PATH — covers Homebrew (Apple Silicon + Intel) and user-local npm installs
+    // $HOME/bin is where npm puts global binaries when prefix = $HOME
+    PATH = "${env.HOME}/bin:${env.HOME}/.npm-global/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
   }
 
   options {
@@ -24,21 +25,40 @@ pipeline {
 
   stages {
 
-    // ── 1. Extend PATH with npm's global bin directory ────────────────────────
-    // Jenkins runs in a stripped shell — npm global packages (like Appium) live
-    // at "$(npm config get prefix)/bin", which can vary per user/machine.
-    // We resolve it dynamically here and inject it for ALL subsequent stages.
+    // ── 1. Extend PATH with every place npm may have installed Appium ─────────
+    // Jenkins runs in a stripped shell with a different npm config than your
+    // terminal. Appium can end up in several locations depending on how npm
+    // prefix was set when it was installed:
+    //   • $HOME/bin          — when prefix = $HOME (most common user install)
+    //   • $HOME/.npm-global/bin — when prefix = ~/.npm-global
+    //   • /opt/homebrew/bin  — when installed via Homebrew-managed npm
+    //   • /usr/local/bin     — Intel Mac Homebrew
+    // We probe all of them and pick the first one that actually contains appium.
     stage('Setup Environment') {
       steps {
         script {
-          def npmPrefix = sh(
-            script: 'npm config get prefix 2>/dev/null || echo /opt/homebrew',
+          def appiumPath = sh(
+            script: '''
+              for candidate in \
+                  "$HOME/bin/appium" \
+                  "$HOME/.npm-global/bin/appium" \
+                  "/opt/homebrew/bin/appium" \
+                  "/usr/local/bin/appium"; do
+                if [ -x "$candidate" ]; then
+                  dirname "$candidate"
+                  exit 0
+                fi
+              done
+              # Last resort: ask npm where its globals live
+              npm config get prefix 2>/dev/null && echo "/bin" | tr -d "\\n" || echo "/opt/homebrew/bin"
+            ''',
             returnStdout: true
           ).trim()
-          env.NPM_BIN = "${npmPrefix}/bin"
-          env.PATH    = "${env.NPM_BIN}:${env.PATH}"
-          echo "npm global bin: ${env.NPM_BIN}"
-          echo "Effective PATH: ${env.PATH}"
+
+          env.APPIUM_BIN_DIR = appiumPath
+          env.PATH = "${appiumPath}:${env.HOME}/bin:${env.HOME}/.npm-global/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:${env.PATH}"
+          echo "Appium found in: ${appiumPath}"
+          echo "Effective PATH:  ${env.PATH}"
         }
       }
     }
