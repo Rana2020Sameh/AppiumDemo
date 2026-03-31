@@ -89,31 +89,54 @@ pipeline {
           lsof -ti tcp:${APPIUM_PORT} | xargs kill -9 2>/dev/null || true
           sleep 1
 
-          # Launch Appium in the background
+          # Launch Appium in the background; redirect stdout+stderr to log file
           nohup appium \
             --port ${APPIUM_PORT} \
             --log-level info \
             --log "${APPIUM_LOG}" \
-            > /dev/null 2>&1 &
+            --allow-insecure chromedriver_autodownload \
+            > "${APPIUM_LOG}.stdout" 2>&1 &
           echo $! > "${APPIUM_PID}"
           echo "Appium PID: $(cat ${APPIUM_PID})"
 
-          # Poll until the /status endpoint replies "ready"
+          # Poll until the /status endpoint returns HTTP 200
+          # Try both 127.0.0.1 and localhost to handle IPv4/IPv6 binding
           echo "Waiting for Appium to be ready..."
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:${APPIUM_PORT}/status 2>/dev/null | grep -q "ready"; then
-              echo "Appium is ready!"
+          APPIUM_READY=false
+          for i in $(seq 1 40); do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              http://127.0.0.1:${APPIUM_PORT}/status 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Appium is ready! (HTTP 200 on attempt $i)"
+              APPIUM_READY=true
               break
             fi
-            echo "  attempt $i / 30..."
-            sleep 2
+            # Also try via localhost in case Appium bound to IPv6
+            HTTP_CODE_V6=$(curl -s -o /dev/null -w "%{http_code}" \
+              http://localhost:${APPIUM_PORT}/status 2>/dev/null || echo "000")
+            if [ "$HTTP_CODE_V6" = "200" ]; then
+              echo "Appium is ready! (HTTP 200 via localhost on attempt $i)"
+              APPIUM_READY=true
+              break
+            fi
+            # Check if Appium process is still alive
+            if ! kill -0 $(cat ${APPIUM_PID} 2>/dev/null) 2>/dev/null; then
+              echo "ERROR: Appium process died unexpectedly!"
+              break
+            fi
+            echo "  attempt $i / 40 (last HTTP code: $HTTP_CODE)..."
+            sleep 3
           done
 
-          # Final check
-          curl -sf http://127.0.0.1:${APPIUM_PORT}/status | grep -q "ready" || {
-            echo "ERROR: Appium did not start in time. Check ${APPIUM_LOG}."
+          # Print Appium log regardless, for visibility
+          echo "=== Appium Server Log ==="
+          cat "${APPIUM_LOG}" 2>/dev/null || cat "${APPIUM_LOG}.stdout" 2>/dev/null || echo "(no log found)"
+          echo "==========================="
+
+          if [ "$APPIUM_READY" != "true" ]; then
+            echo "ERROR: Appium did not start in time."
             exit 1
-          }
+          fi
         '''
       }
     }
