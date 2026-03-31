@@ -49,7 +49,7 @@ pipeline {
           appium --version
 
           echo "--- XCUITest driver ---"
-          appium driver list --installed 2>/dev/null | grep -i xcuitest \
+          appium driver list --installed 2>&1 | grep -i xcuitest \
             || { echo "ERROR: xcuitest driver missing. Run: appium driver install xcuitest"; exit 1; }
 
           echo "--- Xcode ---"
