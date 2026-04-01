@@ -60,19 +60,19 @@ public class SignupPage extends BasePage {
     public void register(String fullNameText, String email, String password) {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(15));
 
-        // Full Name
+        // Full Name — accessibilityId works on both iOS (XCUITest) and Android
         wait.until(ExpectedConditions.elementToBeClickable(
-                        AppiumBy.xpath("//android.widget.EditText[@hint='Enter your Full name']")))
+                        AppiumBy.accessibilityId("Enter your Full name")))
                 .sendKeys(fullNameText);
 
         // Email
         wait.until(ExpectedConditions.elementToBeClickable(
-                        AppiumBy.xpath("//android.widget.EditText[@hint='Enter your Email']")))
+                        AppiumBy.accessibilityId("Enter your Email")))
                 .sendKeys(email);
 
         // Password
         wait.until(ExpectedConditions.elementToBeClickable(
-                        AppiumBy.xpath("//android.widget.EditText[@hint='Enter your Password']")))
+                        AppiumBy.accessibilityId("Enter your Password")))
                 .sendKeys(password);
 
         // Dismiss keyboard
@@ -80,7 +80,7 @@ public class SignupPage extends BasePage {
 
         // Tap Signup button
         wait.until(ExpectedConditions.elementToBeClickable(
-                        AppiumBy.xpath("//android.widget.TextView[@text='Signup']")))
+                        AppiumBy.accessibilityId("Signup")))
                 .click();
     }
 

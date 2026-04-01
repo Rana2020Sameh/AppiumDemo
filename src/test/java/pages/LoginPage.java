@@ -45,10 +45,10 @@ public class LoginPage extends BasePage {
 
     public void tapSignup() {
         signupButton.click();
-        // Wait for Signup screen to load
+        // Wait for Signup screen — use accessibilityId which works on both iOS and Android
         new WebDriverWait(driver, Duration.ofSeconds(10))
                 .until(ExpectedConditions.presenceOfElementLocated(
-                        AppiumBy.xpath("//android.widget.EditText[@hint='Enter your Full name']")
+                        AppiumBy.accessibilityId("Enter your Full name")
                 ));
     }
 

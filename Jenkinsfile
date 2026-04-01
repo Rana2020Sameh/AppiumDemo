@@ -170,6 +170,9 @@ pipeline {
             echo "ERROR: Appium did not become ready in time."
             exit 1
           fi
+
+          # Open Appium Inspector so the server is visually accessible while tests run
+          open -a "Appium Inspector" 2>/dev/null || true
         '''
       }
     }
