@@ -1,0 +1,19 @@
+{
+  "login": {
+    "username": "bob@example.com",
+    "password": "10203040"
+  },
+  "checkout": {
+    "name": "Rana",
+    "address": "Egypt",
+    "city": "cairo",
+    "zipCode": "11783",
+    "country": "Egypt"
+  },
+  "payment": {
+    "cardName": "Rana",
+    "cardNumber": "5123456789012346",
+    "expiryDate": "06/30",
+    "cvv": "123"
+  }
+}

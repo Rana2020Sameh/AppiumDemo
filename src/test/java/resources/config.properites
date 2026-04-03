@@ -8,7 +8,7 @@ androidApp=Apps/Appium Course To-Do (2).apk
 # iOS – iPhone 16 Pro Simulator
 iosDeviceName=iPhone 16 Pro
 iosUdid=9D690641-C39B-492C-AC44-26E0CDD0023A
-iosApp=Apps/todoqacart 2.app
+iosApp=Apps/MyRNDemoApp.app
 
 # Appium server
 appiumUrl=http://127.0.0.1:4723

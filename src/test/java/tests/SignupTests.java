@@ -3,8 +3,13 @@ package tests;
 import org.testng.annotations.Test;
 import pages.LoginPage;
 import pages.SignupPage;
+import utils.SignupTestData;
+import utils.TestDataReader;
 
 public class SignupTests extends BaseTests {
+
+    private static final SignupTestData data =
+            TestDataReader.load("signupTestData", SignupTestData.class);
 
     @Test
     public void signUp() {
@@ -15,6 +20,10 @@ public class SignupTests extends BaseTests {
         // Step 2: Create fresh SignupPage AFTER navigation so PageFactory
         //         initializes elements on the Signup screen
         SignupPage signupPage = new SignupPage(driver);
-        signupPage.register("rana", "r.h@gmail.com", "test@123");
+        signupPage.register(
+                data.user.name,
+                data.user.email,
+                data.user.password
+        );
     }
 }
