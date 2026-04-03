@@ -11,12 +11,12 @@ import org.testng.ITestResult;
 import org.testng.annotations.AfterClass;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
-import java.time.Duration;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.time.Duration;
 
 public class BaseTests {
     protected AppiumDriver driver;
@@ -25,13 +25,13 @@ public class BaseTests {
     public void setUp() throws Exception {
         driver = DriverManager.initializeDriver("ios");
 
-        // Wait for the Login screen to fully load before any test starts.
-        // The app shows a splash/loading screen first — this ensures we only
-        // proceed once the "Enter your Email" field is actually visible.
+        // App opens on the catalog screen first.
+        // Tap "Sauce Labs Backpack" to trigger navigation to the Login screen.
         new WebDriverWait(driver, Duration.ofSeconds(30))
-                .until(ExpectedConditions.presenceOfElementLocated(
-                        AppiumBy.accessibilityId("Enter your Email")
-                ));
+                .until(ExpectedConditions.elementToBeClickable(
+                        AppiumBy.accessibilityId("Sauce Labs Backpack")
+                ))
+                .click();
     }
 
     @AfterClass
