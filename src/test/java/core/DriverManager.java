@@ -58,6 +58,9 @@ public class DriverManager {
             options.setUdid(pro.getProperty("iosUdid"));               // simulator UDID
             options.setApp(resolveAppPath(pro.getProperty("iosApp")));
             options.setNewCommandTimeout(Duration.ofSeconds(3600));
+            // Always start from a clean app state — wipes app data on every session.
+            // Ensures the Login screen is always the first screen regardless of previous runs.
+            options.setFullReset(true);
 
             return new IOSDriver(
                     new URL(pro.getProperty("appiumUrl")),
