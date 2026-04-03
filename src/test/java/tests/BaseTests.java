@@ -25,13 +25,27 @@ public class BaseTests {
     public void setUp() throws Exception {
         driver = DriverManager.initializeDriver("ios");
 
-        // App opens on the catalog screen first.
-        // Tap "Sauce Labs Backpack" to trigger navigation to the Login screen.
-        new WebDriverWait(driver, Duration.ofSeconds(30))
-                .until(ExpectedConditions.elementToBeClickable(
-                        AppiumBy.accessibilityId("Sauce Labs Backpack")
-                ))
-                .click();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+
+        // Wait for the catalog screen to finish loading
+        wait.until(ExpectedConditions.presenceOfElementLocated(
+                AppiumBy.accessibilityId("Sauce Labs Backpack")
+        ));
+
+        // Open the hamburger/sidebar menu (top-right menu button)
+        wait.until(ExpectedConditions.elementToBeClickable(
+                AppiumBy.accessibilityId("open menu")
+        )).click();
+
+        // Tap the "Log In" option inside the menu
+        wait.until(ExpectedConditions.elementToBeClickable(
+                AppiumBy.accessibilityId("menu item log in")
+        )).click();
+
+        // Confirm the Login screen is now visible
+        wait.until(ExpectedConditions.presenceOfElementLocated(
+                AppiumBy.accessibilityId("Enter your Email")
+        ));
     }
 
     @AfterClass
