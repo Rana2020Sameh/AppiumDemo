@@ -21,6 +21,7 @@ public class Purchasepage extends BasePage{
     private WebElement addtocart;
     @iOSXCUITFindBy(accessibility = "tab bar option cart")
     private WebElement cart;
+    //kkk
 
     @iOSXCUITFindBy (accessibility = "Proceed To Checkout button")
     private WebElement proceedtocheckoutbutton;
